@@ -87,9 +87,15 @@ function writeaddrport(ip, port){
  */
 class UDPSocket extends events.EventEmitter{
 
-    constructor(tcp_connection, udp_socket){
+    constructor(tcp_connection, udp_socket, srcaddrport){
         super();
         const self = this;
+
+        if(false === srcaddrport){
+            this.src_undecided = true;
+        } else {
+            [this.srcaddr, this.srcport] = srcaddrport;
+        }
 
         {
             let buf = Buffer.alloc(16);
@@ -103,25 +109,29 @@ class UDPSocket extends events.EventEmitter{
         this.tcp_connection.on("close", () => self.on_close());
     }
 
-    send(msg, addr, port){
-        this.udp_socket.send(msg, port, addr);
+    send(msg){
+        if(this.src_undecided) return;
+        this.udp_socket.send(msg, this.srcport, this.srcaddr);
     }
 
     on_udp_message(msg, rinfo){
         if(!(msg[0] == 0x00 && msg[1] == 0x00)) return; // RSV == 0x0000
+        if(this.src_undecided){
+            // the first valid communication on this socket is remembered
+            this.srcaddr = rinfo.address;
+            this.srcport = rinfo.port;
+            this.src_undecided = false;
+            console.log(this.srcaddr, this.srcport, "remembered");
+        }
+
         if(msg[2] != 0x00) return; // FRAG == 0x00, ignore fragmentation
         let atyp = msg[3];
         let [dstaddr, dstport, data] = readaddrportdata(msg.slice(4), atyp);
         let [srcaddr, srcport] = [rinfo.address, rinfo.port];
         this.emit("message", {
-            dstaddr, dstport, data, // to Internet remote server
-            srcaddr, srcport        // local 'reply' address
+            // to Internet remote server
+            dstaddr, dstport, data
         });
-        console.log(
-            "Local Port [" + this.id + "] " +
-            srcaddr + ":" + srcport + " => " +
-            dstaddr + ":" + dstport + " sending: " + data.length + "bytes"
-        );
     }
     
     on_close(){
@@ -143,14 +153,16 @@ class UDPSocks5 extends events.EventEmitter{
 
     constructor(port){
         super();
+        const self = this;
         
-        this.socks5_socket = net.createServer(this.on_connection);
+        this.socks5_socket = net.createServer(
+            (c) => self.on_connection(self, c));
         this.socks5_socket.listen(port);
         
     }
 
 
-    async on_connection(connection){
+    async on_connection(self, connection){
 
         function assert(v, e){
             if(!v){
@@ -191,6 +203,8 @@ class UDPSocks5 extends events.EventEmitter{
             [srcaddr, srcport] = await readaddrport(connection, atyp);
         }
 
+        let src_undecided = (srcaddr == "0.0.0.0" && srcport == 0);
+
         // accept UDP associate
         
         const udp_socket = require("dgram").createSocket("udp4"); 
@@ -215,8 +229,11 @@ class UDPSocks5 extends events.EventEmitter{
         );
 
         
-        const socket = new UDPSocket(connection, udp_socket);
-        this.emit("socket", socket);
+        const socket = new UDPSocket(
+            connection, udp_socket,
+            (src_undecided ? false : [srcaddr, srcport])
+        );
+        self.emit("socket", socket);
     }
 
 }
