@@ -48,7 +48,8 @@ function main(){
 
     set_up_websocket("ws://localhost:18964", "local");
 
-    set_up_websocket("ws://localhost:6489", "remote");
+    set_up_websocket("ws://localhost:6489/1", "remote");
+    set_up_websocket("ws://localhost:6489/2", "remote");
     
 }
 $(main);

@@ -1,6 +1,14 @@
-//const crypto = require("crypto");
+const util = require("./util");
 const cipher = require("./cipher");
 
+
+// TODO merge with socks5_udp.js
+function writeaddrport(ip, port){
+    const ipval = ip.split(".").map((e) => parseInt(e));
+    ipval.push((port & 0xFF00) >> 8);
+    ipval.push(port & 0xFF);
+    return new Uint8Array(ipval);
+}
 
 const udpsockets = {};
 const websockets = {};
@@ -17,12 +25,6 @@ var websockets_i = 0;
 const shared_secret = Buffer.from("deadbeefdeadbeefdeadbeefdeadbeef");
 
 
-function random_pick_from_obj(obj){
-    const keys = Object.keys(obj);
-    if(keys.length < 1) return null;
-    const key = keys[Math.floor(Math.random() * keys.length)];
-    return obj[key];
-}
 
 
 
@@ -43,7 +45,7 @@ function random_pick_from_obj(obj){
 async function udp_to_ws(udp_socket_id, instructions){ // pack and encryption
     const { dstaddr, dstport, srcaddr, srcport, data } = instructions;
 
-    const ws = random_pick_from_obj(websockets);
+    const ws = util.random_pick_from_obj(websockets);
     if(null == ws) return console.log("One outgoing packet dropped.");
 
     const packet_plain = JSON.stringify({
@@ -52,8 +54,6 @@ async function udp_to_ws(udp_socket_id, instructions){ // pack and encryption
         dstport: dstport,
         data: data.toString("base64"),
     });
-
-    console.log(packet_plain);
 
     const packet = cipher.encrypt(shared_secret, packet_plain);
 
@@ -70,14 +70,20 @@ async function ws_to_udp(message){ // decryption and unpack
     if(!packet_plain) return;
 
     try{
-        var { data, socket } = JSON.parse(packet_plain);
+        var { data, socket, srcaddr, srcport } = JSON.parse(packet_plain);
         if(udpsockets[socket] == undefined) return;
+        data = Buffer.from(data, "base64");
     } catch(e){
         return;
     }
     
-    console.log(socket, data);
-
+    // Didn't really found in RFC1928, but wireshark + dante shows that answers
+    // are also encapsuled packets.
+    udpsockets[socket].send(Buffer.concat([
+        new Uint8Array([0x00,0x00,0x00,0x01]),
+        writeaddrport(srcaddr, srcport),
+        data,
+    ]));
 }
 
 
@@ -113,6 +119,6 @@ function on_udp_socket(socket){
 
 
 module.exports = function(wsserver, socks5server){
-    wsserver.on('connection', on_websocket);
+    wsserver.on("connection", on_websocket);
     socks5server.on("socket", on_udp_socket);
 }

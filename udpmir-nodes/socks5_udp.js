@@ -111,12 +111,15 @@ class UDPSocket extends events.EventEmitter{
 
     send(msg){
         if(this.src_undecided) return;
-        this.udp_socket.send(msg, this.srcport, this.srcaddr);
+
+        this.udp_socket.send(msg, 0, msg.length, this.srcport, this.srcaddr, () => {
+            console.log("UDP to local client:" + msg.length + " bytes written.");
+        });
     }
 
     on_udp_message(msg, rinfo){
         if(!(msg[0] == 0x00 && msg[1] == 0x00)) return; // RSV == 0x0000
-        if(this.src_undecided){
+        if(this.src_undecided || true){
             // the first valid communication on this socket is remembered
             this.srcaddr = rinfo.address;
             this.srcport = rinfo.port;
@@ -132,6 +135,7 @@ class UDPSocket extends events.EventEmitter{
             // to Internet remote server
             dstaddr, dstport, data
         });
+        console.log("Local client @ " + srcaddr + ":" + srcport + " to UDP:" + data.length + " bytes read.");
     }
     
     on_close(){
@@ -211,6 +215,7 @@ class UDPSocks5 extends events.EventEmitter{
         await new Promise((resolve, reject) => udp_socket.bind(resolve));
 
         let local_udp_address = udp_socket.address();
+        console.log("NEW UDP SOCKET:", local_udp_address);
 
         await writebytes(
             connection,
