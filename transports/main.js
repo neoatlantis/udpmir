@@ -27,6 +27,23 @@ async function on_remote_message(e){
     target.send(buffer);
 }
 
+async function websocket_token(websocket, key=new Uint8Array([0,0,0,0])){
+    const token = new Uint8Array(52);
+
+    const t = Math.floor(new Date().getTime() / 30000);
+    const nonce = new Uint8Array(20);
+    window.crypto.getRandomValues(nonce);
+    const timeslice = new Uint8Array(new Uint32Array([t]).buffer);
+    nonce.set(timeslice, 0);
+    token.set(nonce, 0);
+
+    const hmac = sha256.hmac.create(key);
+    hmac.update(nonce);
+    const signature = new Uint8Array(hmac.arrayBuffer());
+    token.set(signature, 20);
+
+    websocket.send(token);
+}
 
 function set_up_websocket(url, group){
     const ws = new WebSocket(url);
@@ -34,10 +51,13 @@ function set_up_websocket(url, group){
     ws.onmessage = ("local" == group ? on_local_message : on_remote_message);
     ("local" == group ? local_sockets : remote_sockets)[url] = ws;
 
-    ws.onopen = () => console.log(group + " ws open");
+    ws.onopen = () => {
+        setTimeout(()=>websocket_token(ws), 100);
+        console.log(group + " ws open");
+    };
     ws.onclose = () => {
         console.log("ws closed. reconnect.");
-        setTimeout(() => set_up_websocket(url, group), 1000);
+        setTimeout(() => set_up_websocket(url, group), 5000);
     };
 }
 

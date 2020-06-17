@@ -5,6 +5,7 @@ const shared_secret = Buffer.from("deadbeefdeadbeefdeadbeefdeadbeef");
 
 const util = require("./util");
 const cipher = require("./cipher");
+const websocket_access_control = require("./websocket_access");
 
 const websockets = {};
 const udpsockets = {};
@@ -16,7 +17,13 @@ wsserver.on('connection', on_websocket);
 
 let websocket_i = 0;
 
-function on_websocket(websocket){
+async function on_websocket(websocket){
+    try{
+        await websocket_access_control(websocket);
+    }catch(e){
+        return;
+    }
+
     websocket_i += 1;
     const id = websocket_i;
 

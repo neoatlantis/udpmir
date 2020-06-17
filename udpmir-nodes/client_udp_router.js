@@ -1,5 +1,6 @@
 const util = require("./util");
 const cipher = require("./cipher");
+const websocket_access_control = require("./websocket_access");
 
 
 // TODO merge with socks5_udp.js
@@ -90,7 +91,13 @@ async function ws_to_udp(message){ // decryption and unpack
 
 
 
-function on_websocket(websocket){
+async function on_websocket(websocket){
+    try{
+        await websocket_access_control(websocket);
+    }catch(e){
+        return;
+    }
+
     websockets_i += 1;
     const id = websockets_i;
     websockets[id] = websocket;
