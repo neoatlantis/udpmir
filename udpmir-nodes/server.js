@@ -6,6 +6,7 @@ const shared_secret = Buffer.from("deadbeefdeadbeefdeadbeefdeadbeef");
 const util = require("./util");
 const cipher = require("./cipher");
 const websocket_access_control = require("./websocket_access");
+const {pack, unpack} = require("./websocket_payload");
 
 const websockets = {};
 const udpsockets = {};
@@ -43,29 +44,28 @@ async function on_websocket_message(message){
     let plaintext = cipher.decrypt(shared_secret, message);
     if(!plaintext) return;
     try{
-        plaintext = JSON.parse(plaintext.toString("utf-8"));
+        plaintext = unpack(plaintext);
     } catch(e){ 
         return;
     }
 
-    let { data, socket, dstaddr, dstport } = plaintext;
-    try{
-        data = Buffer.from(data, "base64");
-    } catch(e){
-        return;
-    }
+    let { data, id, id_buf, addr, port } = plaintext;
 
-    if(undefined == udpsockets[socket]){
+    if(undefined == udpsockets[id]){
         const udpsocket = require("dgram").createSocket("udp4"); 
+        udpsocket.last_active = new Date().getTime();
+
         await new Promise((resolve, reject) => udpsocket.bind(resolve));
-        udpsockets[socket] = udpsocket;
+        udpsockets[id] = udpsocket;
+        udpsocket.id_buf = id_buf;
+        udpsocket.id = id;
 
         udpsocket.on("message", (msg, rinfo) => 
-            on_udpsocket_message(socket, msg, rinfo));
+            on_udpsocket_message(id, msg, rinfo));
     }
 
-    udpsockets[socket].send(data, 0, data.length, dstport, dstaddr);
-    console.log("UDP to remote @ " + dstaddr + ":" + dstport + " : " + data.length + " bytes written.");
+    udpsockets[id].send(data, 0, data.length, port, addr);
+    console.log("UDP to remote @ " + addr + ":" + port + " : " + data.length + " bytes written.");
 }
 
 
@@ -75,13 +75,35 @@ async function on_udpsocket_message(id, msg, rinfo){
     const udpsocket = udpsockets[id];
     const websocket = util.random_pick_from_obj(websockets);
 
+    udpsocket.last_active = new Date().getTime();
+
     const plaintext = {
-        data: msg.toString("base64"),
-        socket: id,
-        srcaddr: rinfo.address,
-        srcport: rinfo.port,
+        data: msg,
+        id: udpsocket.id_buf, 
+        addr: rinfo.address,
+        port: rinfo.port,
     };
     
     console.log("Remote to UDP: " + msg.length + " bytes read.");
-    websocket.send(cipher.encrypt(shared_secret, JSON.stringify(plaintext)));
+    websocket.send(cipher.encrypt(shared_secret, pack(plaintext)));
 }
+
+
+
+function remove_inactive_udp_sockets(){
+    const now = new Date().getTime();
+    const removing = [];
+    for(let socketid in udpsockets){
+        if(now - udpsockets[socketid].last_active > 30000){
+            removing.push(socketid);
+        }
+    }
+    for(let socketid of removing){
+        console.log("Remove socket ", socketid);
+        const socket = udpsockets[socketid];
+        socket.close();
+        socket.removeAllListeners();
+        delete udpsockets[socketid];
+    }
+}
+setInterval(remove_inactive_udp_sockets, 10000);

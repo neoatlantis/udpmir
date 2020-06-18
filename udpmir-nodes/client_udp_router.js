@@ -1,6 +1,7 @@
 const util = require("./util");
 const cipher = require("./cipher");
 const websocket_access_control = require("./websocket_access");
+const {pack, unpack} = require("./websocket_payload");
 
 
 // TODO merge with socks5_udp.js
@@ -49,11 +50,11 @@ async function udp_to_ws(udp_socket_id, instructions){ // pack and encryption
     const ws = util.random_pick_from_obj(websockets);
     if(null == ws) return console.log("One outgoing packet dropped.");
 
-    const packet_plain = JSON.stringify({
-        socket: udp_socket_id,
-        dstaddr: dstaddr, 
-        dstport: dstport,
-        data: data.toString("base64"),
+    const packet_plain = pack({
+        id: udp_socket_id,
+        addr: dstaddr, 
+        port: dstport,
+        data: data,
     });
 
     const packet = cipher.encrypt(shared_secret, packet_plain);
@@ -71,18 +72,17 @@ async function ws_to_udp(message){ // decryption and unpack
     if(!packet_plain) return;
 
     try{
-        var { data, socket, srcaddr, srcport } = JSON.parse(packet_plain);
-        if(udpsockets[socket] == undefined) return;
-        data = Buffer.from(data, "base64");
+        var { data, id, id_buf, addr, port } = unpack(packet_plain);
+        if(udpsockets[id] == undefined) return;
     } catch(e){
         return;
     }
     
     // Didn't really found in RFC1928, but wireshark + dante shows that answers
     // are also encapsuled packets.
-    udpsockets[socket].send(Buffer.concat([
+    udpsockets[id].send(Buffer.concat([
         new Uint8Array([0x00,0x00,0x00,0x01]),
-        writeaddrport(srcaddr, srcport),
+        writeaddrport(addr, port),
         data,
     ]));
 }
@@ -121,7 +121,7 @@ function on_udp_socket(socket){
         delete udpsockets[id];
     });
 
-    socket.on("message", (e) => udp_to_ws(id, e)); 
+    socket.on("message", (e) => udp_to_ws(socket.id_buf, e)); 
 }
 
 

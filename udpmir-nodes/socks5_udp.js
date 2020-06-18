@@ -98,8 +98,8 @@ class UDPSocket extends events.EventEmitter{
         }
 
         {
-            let buf = Buffer.alloc(16);
-            self.id = crypto.randomFillSync(buf).toString("hex");
+            self.id_buf = Buffer.alloc(16);
+            self.id = crypto.randomFillSync(self.id_buf).toString("hex");
         }
 
         this.tcp_connection = tcp_connection;
@@ -119,12 +119,11 @@ class UDPSocket extends events.EventEmitter{
 
     on_udp_message(msg, rinfo){
         if(!(msg[0] == 0x00 && msg[1] == 0x00)) return; // RSV == 0x0000
-        if(this.src_undecided || true){
+        if(this.src_undecided){
             // the first valid communication on this socket is remembered
             this.srcaddr = rinfo.address;
             this.srcport = rinfo.port;
             this.src_undecided = false;
-            console.log(this.srcaddr, this.srcport, "remembered");
         }
 
         if(msg[2] != 0x00) return; // FRAG == 0x00, ignore fragmentation
