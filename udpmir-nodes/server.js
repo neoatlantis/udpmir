@@ -6,6 +6,7 @@ const shared_secret = Buffer.from("deadbeefdeadbeefdeadbeefdeadbeef");
 const util = require("./util");
 const cipher = require("./cipher");
 const websocket_access_control = require("./websocket_access");
+const setup_websocket_lifecycle = require("./websocket_lifecycle");
 const {pack, unpack} = require("./websocket_payload");
 
 const websockets = {};
@@ -32,11 +33,12 @@ async function on_websocket(websocket){
     console.log("Remote connection accepted.");
     
     websocket.on("close", function(){
-        websocket.removeAllListeners();
         delete websockets[id];
     });
 
     websocket.on("message", (m) => on_websocket_message(m));
+    
+    setup_websocket_lifecycle(websocket);
 }
 
 
@@ -52,6 +54,8 @@ async function on_websocket_message(message){
     let { data, id, id_buf, addr, port } = plaintext;
 
     if(undefined == udpsockets[id]){
+        // create a new UDP socket for proxy purpose
+
         const udpsocket = require("dgram").createSocket("udp4"); 
         udpsocket.last_active = new Date().getTime();
 

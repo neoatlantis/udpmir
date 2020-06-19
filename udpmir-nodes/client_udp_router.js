@@ -1,7 +1,10 @@
 const util = require("./util");
 const cipher = require("./cipher");
+
+const setup_websocket_lifecycle = require("./websocket_lifecycle");
 const websocket_access_control = require("./websocket_access");
 const {pack, unpack} = require("./websocket_payload");
+
 
 
 // TODO merge with socks5_udp.js
@@ -27,10 +30,6 @@ var websockets_i = 0;
 const shared_secret = Buffer.from("deadbeefdeadbeefdeadbeefdeadbeef");
 
 
-
-
-
-// TODO how to identify a friendly websocket connection?
 
 /**
  * Local Socks5 data to remote.
@@ -103,13 +102,12 @@ async function on_websocket(websocket){
     websockets[id] = websocket;
     
     websocket.on("close", function(){
-        websocket.removeAllListeners();
         delete websockets[id];
     });
 
     websocket.on("message", (m) => ws_to_udp(m));
 
-    // TODO websocket keep alive
+    setup_websocket_lifecycle(websocket);
 }
 
 function on_udp_socket(socket){

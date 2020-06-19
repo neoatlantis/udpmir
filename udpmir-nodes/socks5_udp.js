@@ -3,6 +3,7 @@ const events = require("events");
 const crypto = require("crypto");
 
 
+
 async function readbytes(connection, count){
     var got = 0;
     const chunks = [];

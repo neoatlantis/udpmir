@@ -46,7 +46,7 @@ async function websocket_token(websocket, key=new Uint8Array([0,0,0,0])){
 }
 
 function set_up_websocket(url, group){
-    const ws = new WebSocket(url);
+    const ws = new ReconnectingWebSocket(url);
 
     ws.onmessage = ("local" == group ? on_local_message : on_remote_message);
     ("local" == group ? local_sockets : remote_sockets)[url] = ws;
@@ -57,7 +57,6 @@ function set_up_websocket(url, group){
     };
     ws.onclose = () => {
         console.log("ws closed. reconnect.");
-        setTimeout(() => set_up_websocket(url, group), 5000);
     };
 }
 
