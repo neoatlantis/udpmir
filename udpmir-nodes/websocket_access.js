@@ -11,10 +11,9 @@
  * time slice, which is defined as UNIX timestamp divided by 30 seconds.
  * A tolerance is given +/- 30 seconds for erver/client time mismatches.
  */
+const config = require("./config");
 const crypto = require("crypto");
-// TODO
-// Access key.
-const shared_secret = Buffer.from([0,0,0,0]);
+const shared_secret = config("websocket-access-key");
 
 
 let past_timeslice, current_timeslice, future_timeslice, current_time;
