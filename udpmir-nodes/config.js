@@ -1,5 +1,6 @@
 /*
 
+role
 websocket-access-key
 websocket-sharedsecret
 websocket-port

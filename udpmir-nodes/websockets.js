@@ -12,7 +12,6 @@ const config = require("./config");
 const util = require("./util");
 const cipher = require("./cipher");
 
-const shared_secret = config("websocket-sharedsecret");
 var websockets_i = 0;
 const websockets = {};
 
@@ -110,15 +109,15 @@ async function on_sending_request(message){
         data: data,
     });
 
-    const packet = cipher.encrypt(shared_secret, packet_plain);
-    ws.send(packet);
+    let p = cipher.encrypt(packet_plain);
+    if(null != p) ws.send(p);
 }
 
 
 
 
 async function on_data_received(message){
-    let plaintext = cipher.decrypt(shared_secret, message);
+    let plaintext = cipher.decrypt(message);
     if(!plaintext) return;
     try{
         plaintext = unpack(plaintext);
