@@ -43,17 +43,23 @@
  *  0x03, socket_id, addr, port, data
  */
 
-
+const events = require("events");
 const crypto = require("crypto");
 const config = require("./config");
 
 const timeslices = require("./cipher_timesliced");
 const sharedsecret = config("websocket-sharedsecret");
 
+const ECDHCURVE = "secp384r1";
 const ALGORITHM = "AES-256-CCM";
 const AUTHLENGTH = 16;
 const NONCELENGTH = 12;
 
+const EPHEMERAL_SERVER_KEY_LIFE = 3600 * 1000;   // ms
+const EPHEMERAL_SERVER_KEY_PERIOD = 600 * 1000; // ms
+
+// ---------------------------------------------------------------------------
+// AEAD keys management
 
 var aead_key_past, aead_key_current;
 timeslices[30].on("changed", function({ past, current }){
@@ -62,6 +68,7 @@ timeslices[30].on("changed", function({ past, current }){
         sharedsecret, current, 1, 32, 'sha256');
 });
 
+// ---------------------------------------------------------------------------
 
 function encrypt(plaintext){
     let salt = Buffer.from("00000000", "hex");
@@ -119,6 +126,73 @@ function decrypt(ciphertext, salt){
     return ret;
 }
 
+// ---------------------------------------------------------------------------
+// Ephemeral key generation and rotation
+// Only activated when config("role") == "server"
 
-module.exports.decrypt = decrypt;
-module.exports.encrypt = encrypt;
+var ephemeral_server_keys = new Map();
+if(config("role") == "server"){
+    setInterval(rotate_ephemeral_server_keys, EPHEMERAL_SERVER_KEY_PERIOD);
+    rotate_ephemeral_server_keys();
+}
+function rotate_ephemeral_server_keys(){
+    const now = new Date().getTime();
+    const deadline = now - EPHEMERAL_SERVER_KEY_LIFE;
+    const Nmax = Math.ceil(
+        EPHEMERAL_SERVER_KEY_LIFE / EPHEMERAL_SERVER_KEY_PERIOD) * 2;
+
+    // remove expired keys
+    for(let [creation, _] of ephemeral_server_keys){
+        if(creation < deadline) ephemeral_server_keys.delete(creation);
+    }
+
+    // if too many keys generated: stop generation
+    if(ephemeral_server_keys.size > Nmax) return;
+
+    // otherwise, generate a new key
+    const new_key = crypto.createECDH(ECDHCURVE);
+    const new_public_key = new_key.generateKeys();
+
+    ephemeral_server_keys.set(now, {
+        public_key: new_public_key,
+        compute_secret: new_key.computeSecret,
+    });
+}
+
+function dump_ephemeral_server_keys(){
+    const now = new Date().getTime();
+    const deadline = now - EPHEMERAL_SERVER_KEY_LIFE;
+    const ret = [];
+    for(let [creation, {public_key, compute_secret}] of ephemeral_server_keys){
+        if(creation < deadline) continue;
+        ret.push([creation, public_key]);
+    }
+    return ret;
+}
+
+
+// ---------------------------------------------------------------------------
+// cipher layer interface
+
+class CipherLayer extends events.EventEmitter {
+
+    constructor(){
+        super();
+        this.ecdh = crypto.createECDH(ECDHCURVE);
+    }
+
+    allocate_client_socket_id(){
+        
+    }
+
+    before_outgoing({socket_id, port, addr, data}){
+    }
+
+    before_incoming(packet){
+    }
+
+
+}
+
+
+module.exports = new CipherLayer();

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 require("./config").init({
+    "role": "server",
     "websocket-access-key"  : Buffer.from("00000000", "hex"),
     "websocket-sharedsecret": Buffer.from("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "hex"),
     "websocket-port": 6489,
