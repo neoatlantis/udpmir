@@ -1,6 +1,6 @@
 const net = require("net");
 const events = require("events");
-const crypto = require("crypto");
+const cipher = require("./cipher");
 
 
 
@@ -98,10 +98,7 @@ class UDPSocket extends events.EventEmitter{
             [this.srcaddr, this.srcport] = srcaddrport;
         }
 
-        {
-            self.id_buf = Buffer.alloc(16);
-            self.id = crypto.randomFillSync(self.id_buf).toString("hex");
-        }
+        cipher.allocate_client_socket_id(this);
 
         this.tcp_connection = tcp_connection;
         this.udp_socket = udp_socket;

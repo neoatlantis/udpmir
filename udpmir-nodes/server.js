@@ -18,24 +18,23 @@ const udpsockets = {};
 
 
 cipher.on("udp_receive", async function(message){
-    let { data, id, id_buf, addr, port } = message;
+    let { data, id, addr, port } = message;
 
-    if(undefined == udpsockets[id]){
+    if(undefined == udpsockets[id.string]){
         // create a new UDP socket for proxy purpose
 
         const udpsocket = require("dgram").createSocket("udp4"); 
         udpsocket.last_active = new Date().getTime();
 
         await new Promise((resolve, reject) => udpsocket.bind(resolve));
-        udpsockets[id] = udpsocket;
-        udpsocket.id_buf = id_buf;
+        udpsockets[id.string] = udpsocket;
         udpsocket.id = id;
 
         udpsocket.on("message", (msg, rinfo) => 
             on_udpsocket_message(id, msg, rinfo));
     }
 
-    udpsockets[id].send(data, 0, data.length, port, addr);
+    udpsockets[id.string].send(data, 0, data.length, port, addr);
     console.log("UDP to remote @ " + addr + ":" + port + " : " + data.length + " bytes written.");
 });
 
@@ -43,11 +42,11 @@ cipher.on("udp_receive", async function(message){
 
 
 async function on_udpsocket_message(id, msg, rinfo){
-    const udpsocket = udpsockets[id];
+    const udpsocket = udpsockets[id.string];
     udpsocket.last_active = new Date().getTime();
 
     cipher.before_outgoing({
-        id_buf: udpsocket.id_buf,
+        id: udpsocket.id,
         data: msg,
         addr: rinfo.address,
         port: rinfo.port,

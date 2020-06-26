@@ -48,8 +48,9 @@ const crypto = require("crypto");
 const config = require("./config");
 
 const {pack, unpack} = require("./websocket_payload");
-const timeslices = require("./cipher_timesliced");
+const timeslices = require("./timeslices");
 const sharedsecret = config("websocket-sharedsecret");
+const SocketID = require("./socketid");
 
 const ECDHCURVE = "secp384r1";
 const ALGORITHM = "AES-256-CCM";
@@ -134,14 +135,14 @@ var ephemeral_server_keys = new Map();
 function rotate_ephemeral_server_keys({past, current}){
     // remove expired keys
     for(let [creation, _] of ephemeral_server_keys){
-        if(creation < past) ephemeral_server_keys.delete(creation);
+        if(creation < past.value) ephemeral_server_keys.delete(creation);
     }
 
     // otherwise, generate a new key
     const new_key = crypto.createECDH(ECDHCURVE);
     const new_public_key = new_key.generateKeys();
 
-    ephemeral_server_keys.set(current, {
+    ephemeral_server_keys.set(current.value, {
         public_key: new_public_key,
         compute_secret: new_key.computeSecret,
     });
@@ -150,7 +151,8 @@ function rotate_ephemeral_server_keys({past, current}){
 function dump_ephemeral_server_keys(){
     const ret = [];
     for(let [creation, {public_key, compute_secret}] of ephemeral_server_keys){
-        ret.push([creation, public_key]);
+        if(creation < timeslices[300].past.value) continue;
+        ret.push([new timeslices.Timeslice(creation).buffer, public_key]);
     }
     return ret;
 }
@@ -173,17 +175,13 @@ class CipherLayer extends events.EventEmitter {
     allocate_client_socket_id(udpsocket){
         // Intended to be called when running in client mode. Allocates a local
         // ECDH key to client.
-        if(!IS_SERVER) throw Error("Refuse to allocate socket id in server mode.");
-        const ecdh = crypto.createECDH(ECDHCURVE);
-        const socket_id_buf = ecdh.generateKeys();
-        const socket_id = socket_id_buf.toString("hex");
-        udpsocket.id = socket_id;
-        udpsocket.id_buf = socket_id_buf;
+        if(IS_SERVER) throw Error("Refuse to allocate socket id in server mode.");
+        udpsocket.id = SocketID.generate();
     }
 
-    before_outgoing({id_buf, port, addr, data}){
+    before_outgoing({id, port, addr, data}){ // from UDP
         const packet_plain = pack({
-            id: id_buf,
+            id: id.buffer,
             addr: addr, 
             port: port,
             data: data,
@@ -194,7 +192,7 @@ class CipherLayer extends events.EventEmitter {
         //if(null != p) ws.send(p);
     }
 
-    before_incoming(message){
+    before_incoming(message){ // from WebSocket
         let plaintext = decrypt(message);
         if(!plaintext) return;
         try{
@@ -203,8 +201,9 @@ class CipherLayer extends events.EventEmitter {
             return;
         }
 
-        const { data, id, id_buf, addr, port } = plaintext;
-        this.emit("udp_receive", {data, id, id_buf, addr, port});
+        const { data, id_buf, addr, port } = plaintext;
+        const id = SocketID.from_buffer(id_buf);
+        this.emit("udp_receive", {data, id, addr, port});
 
     }
 

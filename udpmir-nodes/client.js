@@ -21,14 +21,14 @@ const udp_socks5_server = new UDPSocks5(8964);
 udp_socks5_server.on("socket", on_udp_socket);
 function on_udp_socket(socket){
     const id = socket.id;
-    udpsockets[id] = socket;
+    udpsockets[id.string] = socket;
 
     socket.on("close", function(){
         socket.removeAllListeners();
         delete udpsockets[id];
     });
 
-    socket.on("message", (e) => udp_to_ws(socket.id_buf, e)); 
+    socket.on("message", (e) => udp_to_ws(id, e)); 
 }
 
 
@@ -50,7 +50,7 @@ function writeaddrport(ip, port){
 async function udp_to_ws(udp_socket_id, instructions){ // pack and encryption
     const { dstaddr, dstport, srcaddr, srcport, data } = instructions;
     cipher.before_outgoing({
-        id_buf: udp_socket_id,
+        id: udp_socket_id,
         addr: dstaddr, 
         port: dstport,
         data: data,
@@ -63,12 +63,12 @@ async function udp_to_ws(udp_socket_id, instructions){ // pack and encryption
  * decrypted data to UDP socket.
  */
 cipher.on("udp_receive", async function (message){ // decryption and unpack
-    const { data, id, id_buf, addr, port } = message;
-    if(udpsockets[id] == undefined) return;
+    const { data, id, addr, port } = message;
+    if(udpsockets[id.string] == undefined) return;
     
     // Didn't really found in RFC1928, but wireshark + dante shows that answers
     // are also encapsuled packets.
-    udpsockets[id].send(Buffer.concat([
+    udpsockets[id.string].send(Buffer.concat([
         new Uint8Array([0x00,0x00,0x00,0x01]),
         writeaddrport(addr, port), // these are remote ports got by server
         data,
