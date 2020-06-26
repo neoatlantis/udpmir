@@ -47,6 +47,7 @@ const events = require("events");
 const crypto = require("crypto");
 const config = require("./config");
 
+const {pack, unpack} = require("./websocket_payload");
 const timeslices = require("./cipher_timesliced");
 const sharedsecret = config("websocket-sharedsecret");
 
@@ -55,8 +56,7 @@ const ALGORITHM = "AES-256-CCM";
 const AUTHLENGTH = 16;
 const NONCELENGTH = 12;
 
-const EPHEMERAL_SERVER_KEY_LIFE = 3600 * 1000;   // ms
-const EPHEMERAL_SERVER_KEY_PERIOD = 600 * 1000; // ms
+const IS_SERVER = (config("role") === "server");
 
 // ---------------------------------------------------------------------------
 // AEAD keys management
@@ -131,45 +131,35 @@ function decrypt(ciphertext, salt){
 // Only activated when config("role") == "server"
 
 var ephemeral_server_keys = new Map();
-if(config("role") == "server"){
-    setInterval(rotate_ephemeral_server_keys, EPHEMERAL_SERVER_KEY_PERIOD);
-    rotate_ephemeral_server_keys();
-}
-function rotate_ephemeral_server_keys(){
-    const now = new Date().getTime();
-    const deadline = now - EPHEMERAL_SERVER_KEY_LIFE;
-    const Nmax = Math.ceil(
-        EPHEMERAL_SERVER_KEY_LIFE / EPHEMERAL_SERVER_KEY_PERIOD) * 2;
-
+function rotate_ephemeral_server_keys({past, current}){
     // remove expired keys
     for(let [creation, _] of ephemeral_server_keys){
-        if(creation < deadline) ephemeral_server_keys.delete(creation);
+        if(creation < past) ephemeral_server_keys.delete(creation);
     }
-
-    // if too many keys generated: stop generation
-    if(ephemeral_server_keys.size > Nmax) return;
 
     // otherwise, generate a new key
     const new_key = crypto.createECDH(ECDHCURVE);
     const new_public_key = new_key.generateKeys();
 
-    ephemeral_server_keys.set(now, {
+    ephemeral_server_keys.set(current, {
         public_key: new_public_key,
         compute_secret: new_key.computeSecret,
     });
 }
 
 function dump_ephemeral_server_keys(){
-    const now = new Date().getTime();
-    const deadline = now - EPHEMERAL_SERVER_KEY_LIFE;
     const ret = [];
     for(let [creation, {public_key, compute_secret}] of ephemeral_server_keys){
-        if(creation < deadline) continue;
         ret.push([creation, public_key]);
     }
     return ret;
 }
 
+if(IS_SERVER){
+    timeslices[300].on("changed", rotate_ephemeral_server_keys);
+} else {
+    // pulls server public keys peridically
+}
 
 // ---------------------------------------------------------------------------
 // cipher layer interface
@@ -178,17 +168,44 @@ class CipherLayer extends events.EventEmitter {
 
     constructor(){
         super();
-        this.ecdh = crypto.createECDH(ECDHCURVE);
     }
 
-    allocate_client_socket_id(){
-        
+    allocate_client_socket_id(udpsocket){
+        // Intended to be called when running in client mode. Allocates a local
+        // ECDH key to client.
+        if(!IS_SERVER) throw Error("Refuse to allocate socket id in server mode.");
+        const ecdh = crypto.createECDH(ECDHCURVE);
+        const socket_id_buf = ecdh.generateKeys();
+        const socket_id = socket_id_buf.toString("hex");
+        udpsocket.id = socket_id;
+        udpsocket.id_buf = socket_id_buf;
     }
 
-    before_outgoing({socket_id, port, addr, data}){
+    before_outgoing({id_buf, port, addr, data}){
+        const packet_plain = pack({
+            id: id_buf,
+            addr: addr, 
+            port: port,
+            data: data,
+        });
+
+        let p = encrypt(packet_plain);
+        this.emit("websocket_send", p);
+        //if(null != p) ws.send(p);
     }
 
-    before_incoming(packet){
+    before_incoming(message){
+        let plaintext = decrypt(message);
+        if(!plaintext) return;
+        try{
+            plaintext = unpack(plaintext);
+        } catch(e){ 
+            return;
+        }
+
+        const { data, id, id_buf, addr, port } = plaintext;
+        this.emit("udp_receive", {data, id, id_buf, addr, port});
+
     }
 
 

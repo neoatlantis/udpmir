@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 require("./config").init({
+    "role": "client",
     "websocket-access-key"  : Buffer.from("00000000", "hex"),
     "websocket-sharedsecret": Buffer.from("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "hex"),
     "websocket-port": 18964,
@@ -8,8 +9,9 @@ require("./config").init({
 
 
 
+require("./websockets");
 const UDPSocks5 = require("./socks5_udp");
-const websockets = require("./websockets");
+const cipher = require("./cipher");
 
 const udpsockets = {};
 const udp_socks5_server = new UDPSocks5(8964);
@@ -47,7 +49,7 @@ function writeaddrport(ip, port){
 
 async function udp_to_ws(udp_socket_id, instructions){ // pack and encryption
     const { dstaddr, dstport, srcaddr, srcport, data } = instructions;
-    websockets.send({
+    cipher.before_outgoing({
         id_buf: udp_socket_id,
         addr: dstaddr, 
         port: dstport,
@@ -60,8 +62,7 @@ async function udp_to_ws(udp_socket_id, instructions){ // pack and encryption
  * Fetch a packet from a websocket connection. Decrypt, validate, and put the
  * decrypted data to UDP socket.
  */
-websockets.on("message", ws_to_udp);
-async function ws_to_udp(message){ // decryption and unpack
+cipher.on("udp_receive", async function (message){ // decryption and unpack
     const { data, id, id_buf, addr, port } = message;
     if(udpsockets[id] == undefined) return;
     
@@ -72,4 +73,4 @@ async function ws_to_udp(message){ // decryption and unpack
         writeaddrport(addr, port), // these are remote ports got by server
         data,
     ]));
-}
+});

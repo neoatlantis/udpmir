@@ -8,16 +8,16 @@ require("./config").init({
 });
 
 
+require("./websockets");
 
 const util = require("./util");
 const cipher = require("./cipher");
 
 const udpsockets = {};
-const websockets = require("./websockets");
 
 
-websockets.on("message", on_websocket_message);
-async function on_websocket_message(message){
+
+cipher.on("udp_receive", async function(message){
     let { data, id, id_buf, addr, port } = message;
 
     if(undefined == udpsockets[id]){
@@ -37,7 +37,7 @@ async function on_websocket_message(message){
 
     udpsockets[id].send(data, 0, data.length, port, addr);
     console.log("UDP to remote @ " + addr + ":" + port + " : " + data.length + " bytes written.");
-}
+});
 
 
 
@@ -46,7 +46,7 @@ async function on_udpsocket_message(id, msg, rinfo){
     const udpsocket = udpsockets[id];
     udpsocket.last_active = new Date().getTime();
 
-    websockets.send({
+    cipher.before_outgoing({
         id_buf: udpsocket.id_buf,
         data: msg,
         addr: rinfo.address,

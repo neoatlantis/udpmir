@@ -16,8 +16,6 @@ var websockets_i = 0;
 const websockets = {};
 
 const websocket_access_control = require("./websocket_access");
-const {pack, unpack} = require("./websocket_payload");
-
 
 const wsserver = new ws.Server({ port: config("websocket-port") });
 wsserver.on("connection", on_websocket);
@@ -74,57 +72,16 @@ function websocket_set_keepalive(ws){
     ws.on("pong", on_pong);
 }
 
-
-
-
-
-
 /**
- * Exposed operator for interacting with websockets cluster.
- *
- * This is an EventEmitter with a `send` method.
+ * Websockets are operated by `cipher` layer.
  */
-class WebsocketsOperator extends events.EventEmitter {
-    send (data){ on_sending_request(data); }
-}
-const op = new WebsocketsOperator();
-module.exports = op;
 
-
-
-
-
-
-
-async function on_sending_request(message){
-    const { id_buf, addr, port, data } = message;
+cipher.on("websocket_send", async function on_sending_request(message){
     const ws = util.random_pick_from_obj(websockets);
-    
     if(null == ws) return console.log("One outgoing packet dropped.");
-
-    const packet_plain = pack({
-        id: id_buf,
-        addr: addr, 
-        port: port,
-        data: data,
-    });
-
-    let p = cipher.encrypt(packet_plain);
-    if(null != p) ws.send(p);
-}
-
-
-
+    ws.send(message);
+});
 
 async function on_data_received(message){
-    let plaintext = cipher.decrypt(message);
-    if(!plaintext) return;
-    try{
-        plaintext = unpack(plaintext);
-    } catch(e){ 
-        return;
-    }
-
-    const { data, id, id_buf, addr, port } = plaintext;
-    op.emit("message", {data, id, id_buf, addr, port});
+    cipher.before_incoming(message);
 }
