@@ -45,6 +45,7 @@
 
 const events = require("events");
 const crypto = require("crypto");
+const crc32 = require("crc-32");
 const config = require("./config");
 
 const {pack, unpack} = require("./websocket_payload");
@@ -54,6 +55,8 @@ const SocketID = require("./socketid");
 
 const ECDHCURVE = "secp384r1";
 const ALGORITHM = "AES-256-CCM";
+const STREAM_ALGORITHM = "CAMELLIA-256-CTR";
+const STREAM_IV_LENGTH = 16;
 const AUTHLENGTH = 16;
 const NONCELENGTH = 12;
 
@@ -70,6 +73,35 @@ timeslices[30].on("changed", function({ past, current }){
 });
 
 // ---------------------------------------------------------------------------
+
+const crc32_checksum = new Int32Array(1);
+const crc32_u8array = new Uint8Array(crc32_checksum.buffer);
+
+function stream_encrypt(key, plaintext){
+    crc32_checksum[0] = crc32.buf(plaintext);
+    const data = Buffer.concat([crc32_u8array, plaintext]);
+    const iv = crypto.randomBytes(STREAM_IV_LENGTH);
+    const cipher = crypto.createCipheriv(STREAM_ALGORITHM, key, iv);
+    const ciphertext = cipher.update(data);
+    cipher.final();
+    return Buffer.concat([iv, ciphertext]);
+}
+
+function stream_decrypt(key, ciphertext){
+    const iv = ciphertext.slice(0, STREAM_IV_LENGTH);
+    const data = ciphertext.slice(STREAM_IV_LENGTH);
+    const decipher = crypto.createDecipheriv(STREAM_ALGORITHM, key, iv);
+    const decrypted = decipher.update(data);
+    decipher.final();
+
+    const checksum = decrypted.slice(0, 4);
+    const plaintext = decrypted.slice(4);
+    crc32_checksum[0] = crc32.buf(plaintext);
+    if(Buffer.from(crc32_u8array).equals(checksum)){
+        return plaintext;
+    }
+    return null;
+}
 
 function encrypt(plaintext){
     let salt = Buffer.from("00000000", "hex");
@@ -144,7 +176,7 @@ function rotate_ephemeral_server_keys({past, current}){
 
     ephemeral_server_keys.set(current.value, {
         public_key: new_public_key,
-        compute_secret: new_key.computeSecret,
+        pair: new_key.computeSecret,
     });
 }
 
@@ -179,9 +211,9 @@ class CipherLayer extends events.EventEmitter {
         udpsocket.id = SocketID.generate();
     }
 
-    before_outgoing({id, port, addr, data}){ // from UDP
+    before_outgoing(udpsocket, {port, addr, data}){ // from UDP
         const packet_plain = pack({
-            id: id.buffer,
+            id: udpsocket.id.buffer,
             addr: addr, 
             port: port,
             data: data,

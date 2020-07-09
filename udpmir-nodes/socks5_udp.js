@@ -139,7 +139,7 @@ class UDPSocket extends events.EventEmitter{
         this.emit("close");
         this.udp_socket.removeAllListeners();
         this.tcp_connection.removeAllListeners();
-        console.log("Local Port [" + this.id + "] closed.");
+        console.log("Local Port [" + this.id.string + "] closed.");
     }
 
 

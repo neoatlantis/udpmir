@@ -25,14 +25,6 @@ class SocketID {
         return new SocketID(ts, public_key);
     }
 
-    pair (peer_key){
-        if(this.private_key){
-            return this.private_key.computeSecret(peer_key);
-        } else {
-            return peer_key.computeSecret(this.public_key);
-        }
-    }
-
 }
 
 module.exports = SocketID;

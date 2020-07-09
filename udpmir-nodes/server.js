@@ -45,8 +45,7 @@ async function on_udpsocket_message(id, msg, rinfo){
     const udpsocket = udpsockets[id.string];
     udpsocket.last_active = new Date().getTime();
 
-    cipher.before_outgoing({
-        id: udpsocket.id,
+    cipher.before_outgoing(udpsocket, {
         data: msg,
         addr: rinfo.address,
         port: rinfo.port,

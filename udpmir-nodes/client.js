@@ -28,7 +28,7 @@ function on_udp_socket(socket){
         delete udpsockets[id];
     });
 
-    socket.on("message", (e) => udp_to_ws(id, e)); 
+    socket.on("message", (e) => udp_to_ws(socket, e)); 
 }
 
 
@@ -47,10 +47,9 @@ function writeaddrport(ip, port){
 
 
 
-async function udp_to_ws(udp_socket_id, instructions){ // pack and encryption
+async function udp_to_ws(udp_socket, instructions){ // pack and encryption
     const { dstaddr, dstport, srcaddr, srcport, data } = instructions;
-    cipher.before_outgoing({
-        id: udp_socket_id,
+    cipher.before_outgoing(udp_socket, {
         addr: dstaddr, 
         port: dstport,
         data: data,

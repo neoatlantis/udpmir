@@ -4,6 +4,7 @@
   "description": "",
   "main": "client.js",
   "dependencies": {
+    "crc-32": "^1.2.0",
     "msgpack5": "^4.2.1",
     "ws": "^7.3.0"
   },
