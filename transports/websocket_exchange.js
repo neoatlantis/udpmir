@@ -25,7 +25,7 @@ async function on_message(e, target_group){
 }
 
 
-async function websocket_token(websocket, key=new Uint8Array([0,0,0,0])){
+async function websocket_token(websocket, key){
     const token = new Uint8Array(52);
 
     const t = Math.floor(new Date().getTime() / 30000);
@@ -43,24 +43,45 @@ async function websocket_token(websocket, key=new Uint8Array([0,0,0,0])){
     websocket.send(token);
 }
 
+
+function parse_ws_url(url){
+    console.log(url);
+    const parts = /^(ws{1,2}\:\/\/)([^@]+)@([^\/]+)/.exec(url);
+    if(!parts) throw Error("Invalid Websocket URL.");
+
+    const [ prefix, password, host ] = parts.slice(1);
+    const ws_url = prefix + host;
+    const norm_url = prefix + password + "@" + host;
+    return { ws_url, password, norm_url };
+}
+
+
+
 function set_up_websocket(url, group){
-    const ws = new ReconnectingWebSocket(url);
+    const { ws_url, norm_url, password } = parse_ws_url(url);
+    const ws = new ReconnectingWebSocket(ws_url);
 
     const target_group = ("remote" == group ? local_sockets : remote_sockets);
     const ws_group = ("local" == group ? local_sockets : remote_sockets);
 
     ws.onmessage = async function(e){
         const datalen = await on_message(e, target_group);
-        ws_group[url].recv += datalen;
+        ws_group[norm_url].recv += datalen;
+        ws_group[norm_url].status = "connected";
     };
 
-    ws_group[url] = { ws: ws, sent: 0, recv: 0 };
+    ws_group[norm_url] = { ws: ws, sent: 0, recv: 0, status: "closed" };
 
     ws.onopen = () => {
-        setTimeout(()=>websocket_token(ws), 100);
+        ws_group[norm_url].status = "authenticating";
+        setTimeout(()=>websocket_token(
+            ws,
+            new TextEncoder().encode(password)
+        ), 100);
         console.log(group + " ws open");
     };
     ws.onclose = () => {
+        ws_group[norm_url].status = "closed";
         console.log("ws closed. reconnect.");
     };
 }
@@ -79,12 +100,14 @@ setInterval(function(){
         info.local[id] = {
             sent: local_sockets[id].sent, 
             recv: local_sockets[id].recv,
+            status: local_sockets[id].status,
         };
     }
     for(let id in remote_sockets){
         info.remote[id] = {
             sent: remote_sockets[id].sent, 
             recv: remote_sockets[id].recv,
+            status: remote_sockets[id].status,
         };
     }
 

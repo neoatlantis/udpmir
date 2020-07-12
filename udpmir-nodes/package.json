@@ -2,7 +2,7 @@
   "name": "udpmir-node",
   "version": "1.0.0",
   "description": "",
-  "main": "client.js",
+  "main": "index.js",
   "dependencies": {
     "crc-32": "^1.2.0",
     "msgpack5": "^4.2.1",
@@ -11,7 +11,7 @@
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node index.js"
   },
   "author": "NeoAtlantis",
   "license": "GPL-3.0"

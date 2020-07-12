@@ -9,7 +9,7 @@
  *
  * Furthermore, the first 4 bytes in a nonce must be equal to the current
  * time slice, which is defined as UNIX timestamp divided by 30 seconds.
- * A tolerance is given +/- 30 seconds for erver/client time mismatches.
+ * A tolerance is given +/- 30 seconds for server/client time mismatches.
  */
 const config = require("./config");
 const crypto = require("crypto");

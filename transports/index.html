@@ -22,9 +22,15 @@
     }
     .url {
         padding-right: 3em;
+        max-width: 34%;
     }
     .grouplabel{
         background: #CCCCCC;
+    }
+    input[type="text"]{
+        border-width: 0 0 0 1px;
+        font-size: 0.8em;
+        padding: 2px; margin: 2px;
     }
 
 </style>
@@ -35,17 +41,34 @@ Exchanges UDP-Websocket packets via browser. TLS1.3+ESNI for remote connections
 recommended.
 <hr />
 
-<table>
+<table width="100%">
     <thead class="items"><tr>
         <th>URL</th>
+        <th>Status</th>
         <th>Sent</th>
         <th>Send Speed</th>
         <th>Recv</th>
         <th>Recv Speed</th>
     </tr></thead>
-    <thead><tr><td colspan="5" class="grouplabel">Local sockets</td></tr></thead>
+    <thead><tr>
+        <td class="grouplabel">
+            Local sockets
+        </td>
+        <td colspan="5" class="grouplabel">
+            <input type="text" id="new-local" placeholder="Add new..." style="width: 80%" />
+            <button id="add-local">Add</button>
+        </td>
+    </tr></thead>
     <tbody id="local_list"> </tbody>
-    <thead><tr><td colspan="5" class="grouplabel">Remote sockets</td></tr></thead>
+    <thead><tr>
+        <td class="grouplabel">
+            Remote sockets
+        </td>
+        <td colspan="5" class="grouplabel">
+            <input type="text" id="new-remote" placeholder="Add new..." style="width: 80%" />
+            <button id="add-remote">Add</button>
+        </td>
+    </tr></thead>
     <tbody id="remote_list"> </tbody>
 </table>
 

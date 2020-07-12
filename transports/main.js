@@ -8,12 +8,17 @@ import
 
 function formatBytes(a,b=2){if(0===a)return"0 Bytes";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return parseFloat((a/Math.pow(1024,d)).toFixed(c))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}
 
+
+
+
+on_websocket_info(refresh_list);
 function refresh_list(update){
     const local_update = update.local;
     const remote_update = update.remote;
 
     const html_template = `
         <td class="url"></td>
+        <td class="status"></td>
         <td class="sent"></td>
         <td class="sentspeed"></td>
         <td class="recv"></td>
@@ -44,6 +49,7 @@ function refresh_list(update){
             const sent_speed = Math.round(1000 * (sent_update - sent_last) / (now - record_last)),
                   recv_speed = Math.round(1000 * (recv_update - recv_last) / (now - record_last));
 
+            target_item.find(".status").text(info_group[id].status);
             target_item.find(".sent").text(formatBytes(sent_update));
             target_item.find(".sentspeed").text(formatBytes(sent_speed) + "/s");
             target_item.find(".recv").text(formatBytes(recv_update));
@@ -62,16 +68,33 @@ function refresh_list(update){
 }
 
 
-on_websocket_info(refresh_list);
+
+
+function add_websocket_factory(group){
+    return function(){
+        const url = $("#new-" + group).val();
+        try{
+            (group == "local" ? add_local : add_remote)(url);
+        } catch(e){
+            alert(e);
+        }
+    }
+}
+
+
+
+$("#add-local").click(add_websocket_factory("local"));
+$("#add-remote").click(add_websocket_factory("remote"));
+
 
 
 function main(){
 
-    add_local("ws://localhost:18964");
+    /*add_local("ws://localhost:18964");
 
     for(let i=1; i<=10; i++){
         add_remote("ws://localhost:6489/" + i);
-    }
+    }*/
     
 }
 $(main);

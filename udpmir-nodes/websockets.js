@@ -28,6 +28,7 @@ async function on_websocket(websocket){
     try{
         await websocket_access_control(websocket);
     }catch(e){
+        console.log("Websocket access denied, reason:", e.toString());
         return;
     }
 
