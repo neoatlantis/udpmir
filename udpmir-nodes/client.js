@@ -1,15 +1,5 @@
-#!/usr/bin/env node
-
-require("./config").init({
-    "role": "client",
-    "websocket-access-key"  : Buffer.from("00000000", "hex"),
-    "websocket-sharedsecret": Buffer.from("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", "hex"),
-    "websocket-port": 18964,
-});
-
-
-
 require("./websockets");
+
 const UDPSocks5 = require("./socks5_udp");
 const cipher = require("./cipher");
 
