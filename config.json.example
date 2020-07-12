@@ -1,0 +1,5 @@
+{
+    "websocket-access-key"  : "access-key",
+    "websocket-sharedsecret": "shared-secret",
+    "websocket-port": 1984 
+}

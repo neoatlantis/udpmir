@@ -1,74 +1,77 @@
+import
+    { add_local, add_remote, on_websocket_info }
+    from "./websocket_exchange.js"
+;
+
 (function(){
 //////////////////////////////////////////////////////////////////////////////
 
-function random_pick_from_obj(obj){
-    const keys = Object.keys(obj);
-    if(keys.length < 1) return null;
-    const key = keys[Math.floor(Math.random() * keys.length)];
-    return obj[key];
-}
+function formatBytes(a,b=2){if(0===a)return"0 Bytes";const c=0>b?0:b,d=Math.floor(Math.log(a)/Math.log(1024));return parseFloat((a/Math.pow(1024,d)).toFixed(c))+" "+["Bytes","KB","MB","GB","TB","PB","EB","ZB","YB"][d]}
 
-// ---------------------------------------------------------------------------
+function refresh_list(update){
+    const local_update = update.local;
+    const remote_update = update.remote;
 
-const local_sockets = {};
-const remote_sockets = {};
+    const html_template = `
+        <td class="url"></td>
+        <td class="sent"></td>
+        <td class="sentspeed"></td>
+        <td class="recv"></td>
+        <td class="recvspeed"></td>
+    `;
 
-async function on_local_message(e){
-    const buffer = await e.data.arrayBuffer();
-    const target = random_pick_from_obj(remote_sockets);
-    if(!target) return;
-    target.send(buffer);
-}
+    function update_list(info_group, target_div){
+        const now = new Date().getTime();
 
-async function on_remote_message(e){
-    const buffer = await e.data.arrayBuffer();
-    const target = random_pick_from_obj(local_sockets);
-    if(!target) return;
-    target.send(buffer);
-}
+        for(let id in info_group){
+            let target_item = $(target_div).find('[data-id="' + id + '"]');
+            if(target_item.length < 1){
+                target_item = $("<tr>", { "data-id": id })
+                    .html(html_template)
+                    .appendTo(target_div)
+                ;
+                target_item.find(".url").text(id);
+                target_item.data("sent_last", 0).data("recv_last", 0);
+                target_item.data("recordtime_last", now - 1000);
+            }
 
-async function websocket_token(websocket, key=new Uint8Array([0,0,0,0])){
-    const token = new Uint8Array(52);
+            const record_last = target_item.data("recordtime_last");
+            const sent_last = target_item.data("sent_last"),
+                  recv_last = target_item.data("recv_last");
+            const sent_update = info_group[id].sent,
+                  recv_update = info_group[id].recv;
 
-    const t = Math.floor(new Date().getTime() / 30000);
-    const nonce = new Uint8Array(20);
-    window.crypto.getRandomValues(nonce);
-    const timeslice = new Uint8Array(new Uint32Array([t]).buffer);
-    nonce.set(timeslice, 0);
-    token.set(nonce, 0);
+            const sent_speed = Math.round(1000 * (sent_update - sent_last) / (now - record_last)),
+                  recv_speed = Math.round(1000 * (recv_update - recv_last) / (now - record_last));
 
-    const hmac = sha256.hmac.create(key);
-    hmac.update(nonce);
-    const signature = new Uint8Array(hmac.arrayBuffer());
-    token.set(signature, 20);
+            target_item.find(".sent").text(formatBytes(sent_update));
+            target_item.find(".sentspeed").text(formatBytes(sent_speed) + "/s");
+            target_item.find(".recv").text(formatBytes(recv_update));
+            target_item.find(".recvspeed").text(formatBytes(recv_speed) + "/s");
 
-    websocket.send(token);
-}
+            target_item
+                .data("sent_last", sent_update)
+                .data("recv_last", recv_update)
+                .data("recordtime_last", now)
+            ;
+        }
+    }
 
-function set_up_websocket(url, group){
-    const ws = new ReconnectingWebSocket(url);
-
-    ws.onmessage = ("local" == group ? on_local_message : on_remote_message);
-    ("local" == group ? local_sockets : remote_sockets)[url] = ws;
-
-    ws.onopen = () => {
-        setTimeout(()=>websocket_token(ws), 100);
-        console.log(group + " ws open");
-    };
-    ws.onclose = () => {
-        console.log("ws closed. reconnect.");
-    };
+    update_list(local_update, "#local_list");
+    update_list(remote_update, "#remote_list");
 }
 
 
+on_websocket_info(refresh_list);
 
 
 function main(){
 
-    set_up_websocket("ws://localhost:18964", "local");
+    add_local("ws://localhost:18964");
 
-    set_up_websocket("ws://localhost:6489/1", "remote");
-    set_up_websocket("ws://localhost:6489/2", "remote");
+    for(let i=1; i<=10; i++){
+        add_remote("ws://localhost:6489/" + i);
+    }
     
 }
 $(main);

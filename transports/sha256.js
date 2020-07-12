@@ -7,7 +7,6 @@
  * @license MIT
  */
 /*jslint bitwise: true */
-(function () {
   'use strict';
 
   var ERROR = 'input is invalid type';
@@ -498,12 +497,16 @@
     }
   };
 
+
+
+
   var exports = createMethod();
   exports.sha256 = exports;
   exports.sha224 = createMethod(true);
   exports.sha256.hmac = createHmacMethod();
   exports.sha224.hmac = createHmacMethod(true);
 
+/*
   if (COMMON_JS) {
     module.exports = exports;
   } else {
@@ -515,4 +518,6 @@
       });
     }
   }
-})();
+*/
+
+export { exports as sha256 };
